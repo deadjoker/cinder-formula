@@ -1,0 +1,60 @@
+{% set cinder=salt["grains.filter_by"]({
+  "Debian":{
+    "name": "cinder",
+    "pkg": ['cinder-volume', 'cinder-api', 'cinder-scheduler', 'cinder-common'],
+    "service": ['cinder-api', 'cinder-volume', 'cinder-scheduler'],
+    "client_pkg": "python-cinderclient",
+  },
+  "RedHat":{
+    "name": "cinder",
+    "pkg": "openstack-cinder",
+    "service": ['openstack-cinder-api', 'openstack-cinder-scheduler', 'openstack-cinder-volume'],
+    "client_pkg": "python-cinderclient",
+  },
+  "default":{
+    "name": "cinder",
+    "pkg": ['cinder-volume', 'cinder-api', 'cinder-scheduler', 'cinder-common'],
+    "service": ['cinder-api', 'cinder-volume', 'cinder-scheduler'],
+    "client_pkg": "python-cinderclient",
+  }
+  },merge=salt["pillar.get"]("cinder:lookup")) %}
+
+# Set the cinder-api default config
+{%- set cinder_api_config = {
+  "DEFAULT": {
+    "debug": "false",
+    "verbose": "false",
+    "log_file": "/var/log/cinder/api.log",
+    "volume_group": "cinder-volumes",
+    "volume_name_template": "volume-%s",
+    "volumes_dir": "/var/lib/cinder/volumes",
+    "auth_strategy": "keystone",
+    "iscsi_helper": "tgtadm",
+    "rpc_backend": "cinder.openstack.common.rpc.impl_kombu",
+  },
+  "database": {
+    "connection": "mysql://cinder:" + salt["pillar.get"]("cinder:mysql:password") + "@" + salt["pillar.get"]("cinder:mysql:ip","localhost") + "/cinder?charset=utf8",
+  },
+  "keystone_authtoken": {
+    "auth_host": salt["pillar.get"]("cinder:keystone:host", "localhost"),
+    "auth_port": "35357",
+    "auth_protocol": "http",
+    "admin_tenant_name": "service",
+    "admin_user": "cinder",
+    "admin_password": salt["pillar.get"]("cinder:keystone:password"),
+  },
+} %}
+
+
+{% if salt["pillar.get"]("cinder:api-config") %}
+  {% for section, value in salt["pillar.get"]("cinder:api-config").iteritems() %}
+    {% if not cinder_api_config.has_key(section) %}
+      {% do cinder_api_config.update({ section:{} }) %}
+    {% endif %}
+    {% do cinder_api_config[section].update(value) %}
+  {% endfor %}
+{% endif %}
+
+
+{#- vim:ft=sls
+-#}
